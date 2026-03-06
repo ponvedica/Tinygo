@@ -1,0 +1,7 @@
+// hello.ore — the simplest Ore program: print a greeting.
+// Expected output: Hello, Ore!
+
+fn main() {
+    let greeting: String = "Hello, Ore!";
+    println(greeting);
+}

@@ -1,0 +1,14 @@
+// lifetime_ok.ore — demonstrates named lifetimes in function signatures.
+// longest<'a> returns a reference that is valid for lifetime 'a.
+// Expected: no lifetime errors.
+
+fn longest<'a>(x: &'a String, y: &'a String) -> &'a String {
+    return x;
+}
+
+fn main() {
+    let a: String = "apple";
+    let b: String = "banana";
+    let result: &String = longest(&a, &b);
+    println(result);
+}

@@ -1,0 +1,27 @@
+// borrow_ok.ore — valid borrowing patterns.
+// A function takes a shared reference and just reads it.
+// Expected: no borrow errors.
+
+fn length(s: &String) -> Int {
+    // s is a shared borrow — read-only, valid
+    return 0;
+}
+
+fn add_one(n: &mut Int) {
+    // n is a mutable borrow — we can mutate through it
+    return;
+}
+
+fn main() {
+    let mut count: Int = 10;
+    let msg: String = "hello";
+
+    // Shared borrow — can have many
+    let r1: &String = &msg;
+    let _len: Int = length(r1);
+
+    // Mutable borrow — exclusive
+    add_one(&mut count);
+
+    println(count);
+}

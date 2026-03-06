@@ -1,0 +1,12 @@
+// borrow_bad.ore — INVALID: aliasing a mutable and shared borrow.
+// Expected error:
+//   borrow error: cannot borrow 'x' as mutable because it is also borrowed as immutable
+//
+// This program should FAIL the borrow checker.
+
+fn main() {
+    let mut x: Int = 5;
+    let r1: &Int = &x;       // shared borrow
+    let r2: &mut Int = &mut x; // ERROR: x already borrowed as shared
+    println(x);
+}

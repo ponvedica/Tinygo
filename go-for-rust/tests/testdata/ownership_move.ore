@@ -1,0 +1,25 @@
+// ownership_move.ore — demonstrates move semantics.
+// When you pass an owned value to a function, ownership is transferred.
+// Using the original after the move is a compile-time error.
+//
+// The ownership checker should catch the use-after-move on 'name'.
+//
+// Valid program (no errors):
+
+fn greet(name: String) {
+    println(name);
+    // 'name' is dropped here at end of scope
+}
+
+fn make_greeting() -> String {
+    let msg: String = "Ore lang";
+    // msg moves into return — caller owns it
+    return msg;
+}
+
+fn main() {
+    let s: String = make_greeting();
+    greet(s);
+    // s has been moved into greet — cannot use s here
+    // (ownership checker inserts drop for s at end of greet's scope)
+}

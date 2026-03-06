@@ -1,0 +1,24 @@
+// fib.ore — Fibonacci in Ore.
+// Tests: fn, let, for, arithmetic, if/else.
+// Expected output: 55
+
+fn fib(n: Int) -> Int {
+    if n <= 1 {
+        return n;
+    }
+    let mut a: Int = 0;
+    let mut b: Int = 1;
+    let mut i: Int = 2;
+    while i <= n {
+        let c: Int = a + b;
+        a = b;
+        b = c;
+        i = i + 1;
+    }
+    return b;
+}
+
+fn main() {
+    let result: Int = fib(10);
+    println(result);
+}
