@@ -29,7 +29,9 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
+	"tinygo/ast"
 	"tinygo/codegen"
 	"tinygo/lexer"
 	"tinygo/parser"
@@ -124,7 +126,7 @@ func runLex(path string) {
 	}
 }
 
-// runParse prints the parsed AST in a human-readable form.
+// runParse prints the full recursive AST.
 func runParse(path string) {
 	src := readSource(path)
 	l := lexer.New(src)
@@ -139,10 +141,7 @@ func runParse(path string) {
 		}
 		os.Exit(1)
 	}
-	fmt.Println(file)
-	for _, d := range file.Decls {
-		fmt.Println(" ", d)
-	}
+	dumpNode(file, 0)
 }
 
 // runEmit runs the full pipeline through codegen but only dumps the C source.
@@ -223,4 +222,77 @@ func parseErr(p *parser.Parser, err error) bool {
 func fatalf(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, "tinygo: "+format+"\n", args...)
 	os.Exit(1)
+}
+
+// dumpNode recursively walks any AST node and prints it with indentation.
+func dumpNode(node ast.Node, depth int) {
+	pad := strings.Repeat("  ", depth)
+	fmt.Printf("%s%s\n", pad, node)
+	switch n := node.(type) {
+	case *ast.File:
+		for _, d := range n.Decls {
+			dumpNode(d, depth+1)
+		}
+	case *ast.FuncDecl:
+		if n.Body != nil {
+			dumpNode(n.Body, depth+1)
+		}
+	case *ast.VarDeclTop:
+		if n.Value != nil {
+			dumpNode(n.Value, depth+1)
+		}
+	case *ast.BlockStmt:
+		for _, s := range n.Stmts {
+			dumpNode(s, depth+1)
+		}
+	case *ast.VarDeclStmt:
+		if n.Value != nil {
+			dumpNode(n.Value, depth+1)
+		}
+	case *ast.AssignStmt:
+		dumpNode(n.Target, depth+1)
+		dumpNode(n.Value, depth+1)
+	case *ast.IncDecStmt:
+		dumpNode(n.Target, depth+1)
+	case *ast.IfStmt:
+		dumpNode(n.Cond, depth+1)
+		if n.Then != nil {
+			dumpNode(n.Then, depth+1)
+		}
+		if n.Else != nil {
+			dumpNode(n.Else, depth+1)
+		}
+	case *ast.ForStmt:
+		if n.Init != nil {
+			dumpNode(n.Init, depth+1)
+		}
+		if n.Cond != nil {
+			dumpNode(n.Cond, depth+1)
+		}
+		if n.Post != nil {
+			dumpNode(n.Post, depth+1)
+		}
+		if n.Body != nil {
+			dumpNode(n.Body, depth+1)
+		}
+	case *ast.ReturnStmt:
+		if n.Value != nil {
+			dumpNode(n.Value, depth+1)
+		}
+	case *ast.ExprStmt:
+		dumpNode(n.Expr, depth+1)
+	case *ast.BinaryExpr:
+		dumpNode(n.Left, depth+1)
+		dumpNode(n.Right, depth+1)
+	case *ast.UnaryExpr:
+		dumpNode(n.Operand, depth+1)
+	case *ast.CallExpr:
+		dumpNode(n.Func, depth+1)
+		for _, arg := range n.Args {
+			dumpNode(arg, depth+1)
+		}
+	case *ast.SelectorExpr:
+		dumpNode(n.X, depth+1)
+	// Leaf nodes (Ident, IntLit, StringLit, BoolLit) — already printed above
+	}
 }

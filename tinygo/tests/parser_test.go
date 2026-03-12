@@ -1,6 +1,4 @@
-// Unit tests for the tinygo parser.
-// Tests parse simple and complex Go constructs and verify AST structure.
-package parser_test
+package lexer_test
 
 import (
 	"testing"
@@ -10,7 +8,6 @@ import (
 	"tinygo/parser"
 )
 
-// parseFile is a test helper: parse src and fail immediately on error.
 func parseFile(t *testing.T, src string) *ast.File {
 	t.Helper()
 	l := lexer.New([]byte(src))

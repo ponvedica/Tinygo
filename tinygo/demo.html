@@ -1,0 +1,1470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+ <meta charset="UTF-8" />
+ <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+ <title>TinyGo — Live Compiler Demo</title>
+ <link rel="preconnect" href="https://fonts.googleapis.com" />
+ <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+ <style>
+ :root {
+ --bg: #0d1117;
+ --surface: #161b22;
+ --surface2: #1c2230;
+ --border: #30363d;
+ --accent: #58a6ff;
+ --accent2: #3fb950;
+ --warn: #f78166;
+ --purple: #d2a8ff;
+ --yellow: #e3b341;
+ --text: #e6edf3;
+ --muted: #8b949e;
+ --term-bg: #010409;
+ --term-line: #1f2937;
+ }
+
+ * { box-sizing: border-box; margin: 0; padding: 0; }
+
+ body {
+ font-family: 'Inter', sans-serif;
+ background: var(--bg);
+ color: var(--text);
+ height: 100vh;
+ display: flex;
+ flex-direction: column;
+ overflow: hidden;
+ }
+
+ /* ── HEADER ── */
+ header {
+ display: flex;
+ align-items: center;
+ justify-content: space-between;
+ padding: 0 24px;
+ height: 52px;
+ background: var(--surface);
+ border-bottom: 1px solid var(--border);
+ flex-shrink: 0;
+ gap: 16px;
+ }
+
+ .logo {
+ display: flex;
+ align-items: center;
+ gap: 10px;
+ font-family: 'JetBrains Mono', monospace;
+ font-size: 15px;
+ font-weight: 700;
+ letter-spacing: -0.5px;
+ }
+
+ .logo-icon {
+ width: 28px;
+ height: 28px;
+ background: linear-gradient(135deg, var(--accent), var(--purple));
+ border-radius: 7px;
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ font-size: 14px;
+ }
+
+ .logo span.dim { color: var(--muted); font-weight: 400; }
+
+ .status-pill {
+ display: flex;
+ align-items: center;
+ gap: 6px;
+ font-size: 12px;
+ color: var(--muted);
+ background: var(--surface2);
+ border: 1px solid var(--border);
+ border-radius: 20px;
+ padding: 4px 12px;
+ }
+
+ .status-dot {
+ width: 7px;
+ height: 7px;
+ border-radius: 50%;
+ background: var(--warn);
+ transition: background 0.3s;
+ }
+ .status-dot.online { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); }
+
+ /* ── PIPELINE BAR ── */
+ .pipeline {
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ gap: 0;
+ padding: 10px 24px;
+ background: var(--surface);
+ border-bottom: 1px solid var(--border);
+ flex-shrink: 0;
+ }
+
+ .pipe-stage {
+ display: flex;
+ align-items: center;
+ gap: 0;
+ }
+
+ .pipe-node {
+ display: flex;
+ align-items: center;
+ gap: 6px;
+ padding: 5px 14px;
+ border-radius: 6px;
+ font-size: 11.5px;
+ font-family: 'JetBrains Mono', monospace;
+ font-weight: 500;
+ color: var(--muted);
+ border: 1px solid var(--border);
+ background: var(--bg);
+ transition: all 0.3s ease;
+ white-space: nowrap;
+ }
+
+ .pipe-node.active {
+ color: var(--accent);
+ border-color: var(--accent);
+ background: rgba(88, 166, 255, 0.08);
+ box-shadow: 0 0 12px rgba(88, 166, 255, 0.15);
+ }
+
+ .pipe-node.done {
+ color: var(--accent2);
+ border-color: var(--accent2);
+ background: rgba(63, 185, 80, 0.08);
+ }
+
+ .pipe-arrow {
+ color: var(--border);
+ margin: 0 4px;
+ font-size: 16px;
+ transition: color 0.3s;
+ }
+ .pipe-arrow.lit { color: var(--accent2); }
+
+ /* ── MAIN LAYOUT ── */
+ .workspace {
+ display: flex;
+ flex: 1;
+ overflow: hidden;
+ }
+
+ /* ── EDITOR PANEL ── */
+ .editor-panel {
+ width: 50%;
+ display: flex;
+ flex-direction: column;
+ border-right: 1px solid var(--border);
+ }
+
+ .panel-header {
+ display: flex;
+ align-items: center;
+ justify-content: space-between;
+ padding: 8px 16px;
+ background: var(--surface);
+ border-bottom: 1px solid var(--border);
+ flex-shrink: 0;
+ }
+
+ .panel-title {
+ display: flex;
+ align-items: center;
+ gap: 8px;
+ font-size: 12px;
+ font-weight: 500;
+ color: var(--muted);
+ }
+
+ .file-tab {
+ display: flex;
+ align-items: center;
+ gap: 6px;
+ font-size: 12px;
+ font-family: 'JetBrains Mono', monospace;
+ color: var(--text);
+ background: var(--bg);
+ border: 1px solid var(--border);
+ border-radius: 5px;
+ padding: 3px 10px;
+ }
+
+ .file-dot { color: var(--accent2); }
+
+ .editor-wrap {
+ position: relative;
+ flex: 1;
+ overflow: hidden;
+ display: flex;
+ }
+
+ .line-numbers {
+ padding: 16px 0;
+ min-width: 44px;
+ text-align: right;
+ padding-right: 12px;
+ font-family: 'JetBrains Mono', monospace;
+ font-size: 13px;
+ line-height: 22px;
+ color: var(--muted);
+ background: var(--surface2);
+ border-right: 1px solid var(--border);
+ user-select: none;
+ overflow: hidden;
+ flex-shrink: 0;
+ white-space: pre;
+ }
+
+ #editor {
+ flex: 1;
+ padding: 16px;
+ font-family: 'JetBrains Mono', monospace;
+ font-size: 13px;
+ line-height: 22px;
+ background: var(--bg);
+ color: var(--text);
+ border: none;
+ outline: none;
+ resize: none;
+ tab-size: 4;
+ white-space: pre;
+ overflow: auto;
+ caret-color: var(--accent);
+ }
+
+ /* ── COMMAND BUTTONS ── */
+ .commands {
+ display: flex;
+ align-items: center;
+ gap: 8px;
+ padding: 10px 16px;
+ background: var(--surface);
+ border-top: 1px solid var(--border);
+ flex-shrink: 0;
+ }
+
+ .btn {
+ display: flex;
+ align-items: center;
+ gap: 6px;
+ padding: 7px 14px;
+ border-radius: 6px;
+ font-size: 12.5px;
+ font-weight: 600;
+ font-family: 'JetBrains Mono', monospace;
+ cursor: pointer;
+ border: 1px solid transparent;
+ transition: all 0.2s ease;
+ }
+
+ .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+ .btn-run {
+ background: linear-gradient(135deg, #3fb950, #2ea043);
+ color: #010409;
+ border-color: #3fb950;
+ font-size: 13px;
+ padding: 7px 18px;
+ }
+ .btn-run:hover:not(:disabled) {
+ background: linear-gradient(135deg, #56d364, #3fb950);
+ box-shadow: 0 0 20px rgba(63,185,80,0.45);
+ }
+
+ .btn-build {
+ background: var(--accent);
+ color: #0d1117;
+ border-color: var(--accent);
+ }
+ .btn-build:hover:not(:disabled) {
+ background: #79baff;
+ box-shadow: 0 0 16px rgba(88,166,255,0.4);
+ }
+
+ .btn-stage {
+ background: transparent;
+ color: var(--muted);
+ border-color: var(--border);
+ }
+ .btn-stage:hover:not(:disabled) {
+ color: var(--text);
+ border-color: var(--muted);
+ background: var(--surface2);
+ }
+
+ .btn-clear {
+ margin-left: auto;
+ background: transparent;
+ color: var(--warn);
+ border-color: var(--border);
+ }
+ .btn-clear:hover { border-color: var(--warn); background: rgba(247,129,102,0.08); }
+
+ /* ── SNIPPET SELECT ── */
+ .snippet-select {
+ font-family: 'JetBrains Mono', monospace;
+ font-size: 11.5px;
+ background: var(--surface2);
+ color: var(--text);
+ border: 1px solid var(--border);
+ border-radius: 6px;
+ padding: 4px 8px;
+ cursor: pointer;
+ outline: none;
+ transition: border-color 0.2s;
+ }
+ .snippet-select:hover { border-color: var(--accent); }
+ .snippet-select option { background: var(--surface2); }
+
+ /* ── ERROR OVERLAY ── */
+ #errorOverlay {
+ position: absolute;
+ top: 0; left: 44px; right: 0; bottom: 0;
+ pointer-events: none;
+ overflow: hidden;
+ padding-top: 16px;
+ }
+ .err-highlight {
+ position: absolute;
+ left: 0; right: 0;
+ height: 22px;
+ background: rgba(247, 129, 102, 0.13);
+ border-left: 3px solid var(--warn);
+ animation: errFlash 0.4s ease;
+ }
+ @keyframes errFlash {
+ 0% { background: rgba(247,129,102,0.35); }
+ 100% { background: rgba(247,129,102,0.13); }
+ }
+ /* error gutter dot */
+ .err-gutter {
+ position: absolute;
+ right: 4px;
+ width: 8px; height: 8px;
+ border-radius: 50%;
+ background: var(--warn);
+ box-shadow: 0 0 6px var(--warn);
+ transform: translateY(7px);
+ }
+
+ /* ── TERMINAL PANEL ── */
+ .terminal-panel {
+ width: 50%;
+ display: flex;
+ flex-direction: column;
+ background: var(--term-bg);
+ }
+
+ .term-header {
+ display: flex;
+ align-items: center;
+ justify-content: space-between;
+ padding: 9px 16px;
+ background: var(--surface);
+ border-bottom: 1px solid var(--border);
+ flex-shrink: 0;
+ }
+
+ .term-dots {
+ display: flex;
+ gap: 6px;
+ }
+ .term-dots span {
+ width: 11px; height: 11px;
+ border-radius: 50%;
+ }
+ .term-dots .r { background: #ff5f56; }
+ .term-dots .y { background: #ffbd2e; }
+ .term-dots .g { background: #27c93f; }
+
+ .term-title {
+ font-family: 'JetBrains Mono', monospace;
+ font-size: 12px;
+ color: var(--muted);
+ }
+
+ .term-meta {
+ display: flex;
+ align-items: center;
+ gap: 12px;
+ font-family: 'JetBrains Mono', monospace;
+ font-size: 11px;
+ color: var(--muted);
+ }
+
+ .meta-badge {
+ padding: 2px 8px;
+ border-radius: 4px;
+ border: 1px solid var(--border);
+ background: var(--surface2);
+ }
+
+ #terminal {
+ flex: 1;
+ overflow-y: auto;
+ padding: 16px 20px;
+ font-family: 'JetBrains Mono', monospace;
+ font-size: 12.5px;
+ line-height: 20px;
+ }
+
+ .term-line {
+ display: flex;
+ gap: 10px;
+ padding: 1px 0;
+ animation: fadeIn 0.15s ease;
+ }
+
+ @keyframes fadeIn {
+ from { opacity: 0; transform: translateY(3px); }
+ to { opacity: 1; transform: translateY(0); }
+ }
+
+ .term-prompt { color: var(--accent2); user-select: none; flex-shrink: 0; }
+ .term-cmd { color: var(--accent); }
+ .term-out { color: var(--text); white-space: pre-wrap; word-break: break-all; flex: 1; }
+ .term-ok { color: var(--accent2); }
+ .term-err { color: var(--warn); }
+ .term-info { color: var(--yellow); }
+ .term-dim { color: var(--muted); }
+ .term-purple { color: var(--purple); }
+
+ .spinner-line { display: flex; align-items: center; gap: 8px; }
+ .spinner { display: inline-block; animation: spin 0.8s linear infinite; }
+ @keyframes spin { to { transform: rotate(360deg); } }
+
+ /* ── STATS BAR ── */
+ .stats-bar {
+ display: flex;
+ align-items: center;
+ gap: 20px;
+ padding: 7px 20px;
+ border-top: 1px solid var(--border);
+ background: var(--surface);
+ font-family: 'JetBrains Mono', monospace;
+ font-size: 11px;
+ color: var(--muted);
+ flex-shrink: 0;
+ }
+
+ .stat { display: flex; align-items: center; gap: 5px; }
+ .stat-val { color: var(--text); }
+ .stat-val.ok { color: var(--accent2); }
+ .stat-val.err { color: var(--warn); }
+
+ /* ── SPLIT PYTHON VIEW ── */
+ #terminal.split-mode {
+ display: flex;
+ padding: 0;
+ overflow: hidden;
+ }
+ .split-pane {
+ flex: 1;
+ overflow-y: auto;
+ padding: 14px 16px;
+ font-family: 'JetBrains Mono', monospace;
+ font-size: 12px;
+ line-height: 20px;
+ }
+ .split-pane.py-pane {
+ border-left: 1px solid var(--border);
+ background: rgba(59, 130, 246, 0.03);
+ }
+ .split-lang-badge {
+ display: inline-flex;
+ align-items: center;
+ gap: 6px;
+ font-size: 10.5px;
+ font-weight: 700;
+ letter-spacing: 1px;
+ text-transform: uppercase;
+ padding: 3px 10px;
+ border-radius: 4px;
+ margin-bottom: 12px;
+ }
+ .split-lang-badge.go { background: rgba(88,166,255,0.12); color: var(--accent); border: 1px solid rgba(88,166,255,0.3); }
+ .split-lang-badge.py { background: rgba(59,130,246,0.12); color: #93c5fd; border: 1px solid rgba(59,130,246,0.3); }
+ .split-code { white-space: pre-wrap; word-break: break-all; }
+ .go-code { color: var(--text); }
+ .py-code { color: #93c5fd; }
+ .py-kw { color: #c084fc; }
+ .py-fn { color: #86efac; }
+ .py-str { color: #fbbf24; }
+ .py-num { color: #f87171; }
+ .py-comment { color: var(--muted); font-style: italic; }
+
+ .btn-python {
+ background: linear-gradient(135deg, #3b82f6, #2563eb);
+ color: #fff;
+ border-color: #3b82f6;
+ font-size: 12.5px;
+ }
+ .btn-python:hover:not(:disabled) {
+ background: linear-gradient(135deg, #60a5fa, #3b82f6);
+ box-shadow: 0 0 18px rgba(59,130,246,0.45);
+ }
+
+ .btn-ast {
+ background: linear-gradient(135deg, #a855f7, #7c3aed);
+ color: #fff;
+ border-color: #a855f7;
+ font-size: 12.5px;
+ }
+ .btn-ast:hover:not(:disabled) {
+ background: linear-gradient(135deg, #c084fc, #a855f7);
+ box-shadow: 0 0 18px rgba(168,85,247,0.45);
+ }
+
+ /* ── AST TREE ── */
+ .ast-view {
+ padding: 16px 20px;
+ overflow: auto;
+ flex: 1;
+ font-family: 'JetBrains Mono', monospace;
+ font-size: 12px;
+ line-height: 1.6;
+ }
+ .ast-node {
+ position: relative;
+ padding-left: 20px;
+ margin: 1px 0;
+ }
+ .ast-node::before {
+ content: '';
+ position: absolute;
+ left: 0;
+ top: 10px;
+ width: 14px;
+ height: 1px;
+ background: var(--border);
+ }
+ .ast-node::after {
+ content: '';
+ position: absolute;
+ left: 0;
+ top: 0;
+ bottom: 0;
+ width: 1px;
+ background: var(--border);
+ }
+ .ast-node:last-child::after { height: 11px; }
+ .ast-root { padding-left: 0; }
+ .ast-root::before, .ast-root::after { display: none; }
+ .ast-badge {
+ display: inline-block;
+ padding: 1px 7px;
+ border-radius: 4px;
+ font-size: 11px;
+ font-weight: 600;
+ margin-right: 6px;
+ cursor: pointer;
+ user-select: none;
+ }
+ .ast-badge:hover { opacity: 0.8; }
+ .ast-badge.file { background: rgba(88,166,255,0.15); color: var(--accent); border: 1px solid rgba(88,166,255,0.3); }
+ .ast-badge.func { background: rgba(63,185,80,0.15); color: var(--accent2); border: 1px solid rgba(63,185,80,0.3); }
+ .ast-badge.stmt { background: rgba(210,168,255,0.15); color: var(--purple); border: 1px solid rgba(210,168,255,0.3); }
+ .ast-badge.expr { background: rgba(227,179,65,0.15); color: var(--yellow); border: 1px solid rgba(227,179,65,0.3); }
+ .ast-badge.lit { background: rgba(247,129,102,0.15); color: var(--warn); border: 1px solid rgba(247,129,102,0.3); }
+ .ast-badge.other { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+ .ast-children { display: block; }
+ .ast-children.collapsed { display: none; }
+ .ast-label { color: var(--muted); font-size: 11px; }
+
+ /* ── CURSOR BLINK ── */
+ .cursor {
+ display: inline-block;
+ width: 7px;
+ height: 14px;
+ background: var(--accent);
+ margin-left: 2px;
+ animation: blink 1s step-end infinite;
+ vertical-align: middle;
+ }
+ @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+ /* ── SCROLLBAR ── */
+ ::-webkit-scrollbar { width: 5px; height: 5px; }
+ ::-webkit-scrollbar-track { background: transparent; }
+ ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+ </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+ <div class="logo">
+ <div class="logo-icon">TG</div>
+ TinyGo <span class="dim">/ compiler</span>
+ </div>
+
+ <div style="display:flex;align-items:center;gap:12px;">
+ <div class="status-pill">
+ <div class="status-dot" id="statusDot"></div>
+ <span id="statusText">connecting…</span>
+ </div>
+ <div style="font-size:12px;color:var(--muted);font-family:'JetBrains Mono',monospace;">
+ localhost:8080
+ </div>
+ </div>
+</header>
+
+<!-- PIPELINE -->
+<div class="pipeline">
+ <div class="pipe-stage">
+ <div class="pipe-node" id="p-lex">Lexer</div>
+ <div class="pipe-arrow" id="a1">→</div>
+ <div class="pipe-node" id="p-parse">Parser</div>
+ <div class="pipe-arrow" id="a2">→</div>
+ <div class="pipe-node" id="p-type">TypeChecker</div>
+ <div class="pipe-arrow" id="a3">→</div>
+ <div class="pipe-node" id="p-ir">IR</div>
+ <div class="pipe-arrow" id="a4">→</div>
+ <div class="pipe-node" id="p-cg">CodeGen</div>
+ <div class="pipe-arrow" id="a5">→</div>
+ <div class="pipe-node" id="p-bin">Binary</div>
+ </div>
+</div>
+
+<!-- WORKSPACE -->
+<div class="workspace">
+
+ <!-- EDITOR -->
+ <div class="editor-panel">
+ <div class="panel-header">
+ <div class="panel-title">
+ <span>Source Editor</span>
+ </div>
+ <div style="display:flex;align-items:center;gap:10px;">
+ <select class="snippet-select" id="snippetSelect" onchange="loadSnippet(this.value)">
+ <option value="">Examples...</option>
+ <option value="fibonacci">Fibonacci</option>
+ <option value="hello">Hello World</option>
+ <option value="fizzbuzz">FizzBuzz</option>
+ <option value="primes">Primes</option>
+ <option value="factorial">Factorial</option>
+ <option value="error_demo">Error Demo</option>
+ </select>
+ <div class="file-tab">
+ <span class="file-dot">&#9679;</span>
+ main.go
+ </div>
+ </div>
+ </div>
+
+ <div class="editor-wrap">
+ <div class="line-numbers" id="lineNums">1</div>
+ <div id="errorOverlay"></div>
+ <textarea id="editor" spellcheck="false" autocorrect="off" autocapitalize="off"></textarea>
+ </div>
+
+ <div class="commands">
+ <button class="btn btn-run" id="btnRun" onclick="runCmd('run')">Run</button>
+ <button class="btn btn-build" id="btnBuild" onclick="runCmd('build')">Build</button>
+ <button class="btn btn-stage" onclick="runCmd('lex')">Lex</button>
+ <button class="btn btn-stage" onclick="runCmd('parse')">Parse</button>
+ <button class="btn btn-stage" onclick="runCmd('emit')">Emit C</button>
+ <button class="btn btn-python" onclick="showPythonSplit()">Python</button>
+ <button class="btn btn-ast" onclick="showAstTree()">AST</button>
+ <button class="btn btn-clear" onclick="clearTerminal()">Clear</button>
+ </div>
+ </div>
+
+ <!-- TERMINAL -->
+ <div class="terminal-panel">
+ <div class="term-header">
+ <div class="term-dots">
+ <span class="r"></span>
+ <span class="y"></span>
+ <span class="g"></span>
+ </div>
+ <div class="term-title">tinygo — output</div>
+ <div class="term-meta">
+ <span class="meta-badge" id="metaStage">—</span>
+ <span class="meta-badge" id="metaTime">0.000s</span>
+ <span class="meta-badge" id="metaSize">—</span>
+ </div>
+ </div>
+
+ <div id="terminal">
+ <!-- populated by JS -->
+ </div>
+
+ <div class="stats-bar">
+ <div class="stat">runs: <span class="stat-val" id="statRuns">0</span></div>
+ <div class="stat">success: <span class="stat-val ok" id="statOk">0</span></div>
+ <div class="stat">errors: <span class="stat-val err" id="statErr">0</span></div>
+ <div class="stat" style="margin-left:auto;">
+ <span style="color:var(--accent2)">●</span> TinyGo v0.1.0
+ </div>
+ </div>
+ </div>
+
+</div>
+
+<script>
+// ── STATE ───────────────────────────────────────────────────────────────────
+const SERVER = 'http://localhost:8080';
+let runs = 0, oks = 0, errs = 0;
+let busy = false;
+
+// ── SNIPPETS ─────────────────────────────────────────────────────────────────
+const SNIPPETS = {
+ fibonacci: `package main
+
+import "fmt"
+
+func fibonacci(n int) int {
+\tif n <= 1 {
+\t\treturn n
+\t}
+\treturn fibonacci(n-1) + fibonacci(n-2)
+}
+
+func main() {
+\tfor i := 0; i < 10; i++ {
+\t\tfmt.Printf("fib(%d) = %d\\n", i, fibonacci(i))
+\t}
+}`,
+
+ hello: `package main
+
+import "fmt"
+
+func main() {
+\tfmt.Println("Hello, World!")
+\tfmt.Println("Built by TinyGo — a compiler from scratch.")
+}`,
+
+ fizzbuzz: `package main
+
+import "fmt"
+
+func main() {
+\tfor i := 1; i <= 30; i++ {
+\t\tif i%15 == 0 {
+\t\t\tfmt.Println("FizzBuzz")
+\t\t} else if i%3 == 0 {
+\t\t\tfmt.Println("Fizz")
+\t\t} else if i%5 == 0 {
+\t\t\tfmt.Println("Buzz")
+\t\t} else {
+\t\t\tfmt.Println(i)
+\t\t}
+\t}
+}`,
+
+ primes: `package main
+
+import "fmt"
+
+func isPrime(n int) bool {
+\tif n < 2 {
+\t\treturn false
+\t}
+\tfor i := 2; i < n; i++ {
+\t\tif n%i == 0 {
+\t\t\treturn false
+\t\t}
+\t}
+\treturn true
+}
+
+func main() {
+\tfmt.Println("Primes up to 50:")
+\tfor n := 2; n <= 50; n++ {
+\t\tif isPrime(n) {
+\t\t\tfmt.Println(n)
+\t\t}
+\t}
+}`,
+
+ factorial: `package main
+
+import "fmt"
+
+func factorial(n int) int {
+\tif n == 0 {
+\t\treturn 1
+\t}
+\treturn n * factorial(n-1)
+}
+
+func main() {
+\tfor i := 0; i <= 10; i++ {
+\t\tfmt.Printf("%2d! = %d\\n", i, factorial(i))
+\t}
+}`,
+
+ error_demo: `package main
+
+import "fmt"
+
+func main() {
+\tx := 42
+\tfmt.Println("value:", y) // y is undefined — type error on this line!
+\t_ = x
+}`,
+};
+
+const defaultCode = SNIPPETS.fibonacci;
+
+function loadSnippet(key) {
+ if (!key) return;
+ editor.value = SNIPPETS[key] || '';
+ updateLineNums();
+ clearHighlights();
+ document.getElementById('snippetSelect').value = '';
+ editor.focus();
+}
+
+// ── PIPELINE STAGES ──────────────────────────────────────────────────────────
+const STAGES = {
+ lex: ['p-lex'],
+ parse: ['p-lex','p-parse'],
+ emit: ['p-lex','p-parse','p-type','p-cg'],
+ build: ['p-lex','p-parse','p-type','p-ir','p-cg','p-bin'],
+ run: ['p-lex','p-parse','p-type','p-ir','p-cg','p-bin'],
+};
+const ARROWS = ['a1','a2','a3','a4','a5'];
+
+function setPipeline(cmd, state) {
+ // reset all
+ ['p-lex','p-parse','p-type','p-ir','p-cg','p-bin'].forEach(id => {
+ const el = document.getElementById(id);
+ el.classList.remove('active','done');
+ });
+ ARROWS.forEach(id => document.getElementById(id).classList.remove('lit'));
+
+ if (!cmd) return;
+ const s = STAGES[cmd] || [];
+ s.forEach((id, i) => {
+ const el = document.getElementById(id);
+ el.classList.add(state === 'done' ? 'done' : 'active');
+ if (i > 0) {
+ // light arrow before this node
+ const arrows = { 'p-parse':'a1','p-type':'a2','p-ir':'a3','p-cg':'a4','p-bin':'a5' };
+ const arrowId = arrows[id];
+ if (arrowId && state === 'done') {
+ document.getElementById(arrowId).classList.add('lit');
+ }
+ }
+ });
+}
+
+// ── TERMINAL HELPERS ─────────────────────────────────────────────────────────
+const term = document.getElementById('terminal');
+
+function termLine(html, cls='') {
+ const div = document.createElement('div');
+ div.className = 'term-line';
+ div.innerHTML = html;
+ if (cls) div.classList.add(cls);
+ term.appendChild(div);
+ term.scrollTop = term.scrollHeight;
+ return div;
+}
+
+function termPrompt(cmd) {
+ termLine(
+ `<span class="term-prompt">tinygo $</span> <span class="term-cmd">${cmd}</span>`
+ );
+}
+
+function termOutput(text, cls='term-out') {
+ if (!text) return;
+ text.split('\n').forEach(line => {
+ termLine(`<span class="${cls}">${escHtml(line)}</span>`);
+ });
+}
+
+function escHtml(s) {
+ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function termSeparator(label) {
+ termLine(`<span class="term-dim">── ${label} ${'─'.repeat(Math.max(0,46-label.length))}</span>`);
+}
+
+function termBlankLine() {
+ termLine('<span>&nbsp;</span>');
+}
+
+function spinnerLine(msg) {
+ const div = termLine(
+ `<span class="spinner-line term-info"><span class="spinner">&#9711;</span> ${escHtml(msg)}</span>`
+ );
+ return div;
+}
+
+function clearTerminal() {
+ term.innerHTML = '';
+ setPipeline(null, null);
+ clearHighlights();
+ document.getElementById('metaStage').textContent = '—';
+ document.getElementById('metaTime').textContent = '0.000s';
+ document.getElementById('metaSize').textContent = '—';
+ updateStats();
+}
+
+// ── ERROR LINE HIGHLIGHTING ───────────────────────────────────────────────────
+const overlay = document.getElementById('errorOverlay');
+const LINE_H = 22; // must match CSS line-height on #editor
+const PAD_TOP = 16; // must match padding-top on #editor
+
+function clearHighlights() {
+ overlay.innerHTML = '';
+ // clear gutter dots
+ document.querySelectorAll('.err-gutter').forEach(e => e.remove());
+}
+
+function highlightErrorLines(output) {
+ clearHighlights();
+ // Match patterns: "main.go:LINE:COL:" or "line LINE:" or ":LINE:"
+ const patterns = [
+ /(?:main\.go|\w+\.go):(\d+):/g,
+ /line (\d+):/gi,
+ /:(\d+):\d+:/g,
+ ];
+ const lineSet = new Set();
+ for (const re of patterns) {
+ let m;
+ re.lastIndex = 0;
+ while ((m = re.exec(output)) !== null) {
+ const n = parseInt(m[1], 10);
+ if (n > 0) lineSet.add(n);
+ }
+ }
+ if (lineSet.size === 0) return;
+
+ const editorScrollTop = editor.scrollTop;
+
+ lineSet.forEach(lineNum => {
+ // Highlight bar on overlay
+ const bar = document.createElement('div');
+ bar.className = 'err-highlight';
+ bar.style.top = (PAD_TOP + (lineNum - 1) * LINE_H - editorScrollTop) + 'px';
+ overlay.appendChild(bar);
+
+ // Red dot in gutter
+ const dot = document.createElement('div');
+ dot.className = 'err-gutter';
+ dot.title = `Error on line ${lineNum}`;
+ dot.style.top = (PAD_TOP + (lineNum - 1) * LINE_H - lineNums.scrollTop) + 'px';
+ lineNums.style.position = 'relative';
+ lineNums.appendChild(dot);
+ });
+
+ // Keep overlay in sync when editor scrolls
+ editor.onscroll = () => {
+ const scroll = editor.scrollTop;
+ overlay.querySelectorAll('.err-highlight').forEach((bar, i) => {
+ const lineNum = [...lineSet][i];
+ bar.style.top = (PAD_TOP + (lineNum - 1) * LINE_H - scroll) + 'px';
+ });
+ overlay.querySelectorAll('.err-gutter').forEach((dot, i) => {
+ const lineNum = [...lineSet][i];
+ dot.style.top = (PAD_TOP + (lineNum - 1) * LINE_H - lineNums.scrollTop) + 'px';
+ });
+ };
+}
+
+function updateStats() {
+ document.getElementById('statRuns').textContent = runs;
+ document.getElementById('statOk').textContent = oks;
+ document.getElementById('statErr').textContent = errs;
+}
+
+// ── COMPILE ──────────────────────────────────────────────────────────────────
+async function runCmd(cmd) {
+ if (busy) return;
+ busy = true;
+ setButtons(false);
+
+ const code = document.getElementById('editor').value;
+ const displayCmd = `${cmd} main.go`;
+
+ termBlankLine();
+ termSeparator(cmd.toUpperCase());
+ termPrompt(displayCmd);
+
+ // show pipeline as active
+ setPipeline(cmd, 'running');
+
+ const spin = spinnerLine(`Running ${cmd}…`);
+
+ let resp;
+ try {
+ const start = performance.now();
+ const raw = await fetch(`${SERVER}/compile`, {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({ code, command: cmd }),
+ });
+ const elapsed = ((performance.now() - start) / 1000).toFixed(3);
+ resp = await raw.json();
+
+ // remove spinner
+ spin.remove();
+
+ runs++;
+ clearHighlights();
+ if (resp.success) {
+ oks++;
+ setPipeline(cmd, 'done');
+ termOutput(`OK ${resp.stage || cmd} — OK`, 'term-ok');
+ if (resp.output) termOutput(resp.output, 'term-out');
+ if (resp.binarySize)
+ termLine(`<span class="term-purple"> binary size: <strong>${resp.binarySize}</strong></span>`);
+ } else {
+ errs++;
+ setPipeline(cmd, 'running'); // stay highlighted at last stage
+ const errText = resp.output || 'compilation failed';
+ termOutput(errText, 'term-err');
+ // highlight error lines in editor
+ highlightErrorLines(errText);
+ }
+
+ const t = resp.compileTime || `${elapsed}s`;
+ termLine(`<span class="term-dim"> time: ${t}</span>`);
+
+ document.getElementById('metaStage').textContent = resp.stage || cmd;
+ document.getElementById('metaTime').textContent = t;
+ document.getElementById('metaSize').textContent = resp.binarySize || '—';
+
+ } catch(e) {
+ spin.remove();
+ errs++;
+ runs++;
+ termOutput(`error: cannot reach server — ${e.message}`, 'term-err');
+ termOutput('Is the TinyGo server running? → go run server.go', 'term-dim');
+ setPipeline(null, null);
+ }
+
+ updateStats();
+ busy = false;
+ setButtons(true);
+}
+
+function setButtons(enabled) {
+ document.querySelectorAll('.btn').forEach(b => {
+ b.disabled = !enabled;
+ });
+}
+
+// ── LINE NUMBERS ─────────────────────────────────────────────────────────────
+const editor = document.getElementById('editor');
+const lineNums = document.getElementById('lineNums');
+
+function updateLineNums() {
+ const lines = editor.value.split('\n').length;
+ lineNums.textContent = Array.from({length: lines}, (_, i) => i+1).join('\n');
+ // sync scroll
+ lineNums.scrollTop = editor.scrollTop;
+}
+
+editor.addEventListener('input', updateLineNums);
+editor.addEventListener('scroll', () => { lineNums.scrollTop = editor.scrollTop; });
+
+// Tab key support
+editor.addEventListener('keydown', e => {
+ if (e.key === 'Tab') {
+ e.preventDefault();
+ const s = editor.selectionStart;
+ const val = editor.value;
+ editor.value = val.slice(0,s) + '\t' + val.slice(editor.selectionEnd);
+ editor.selectionStart = editor.selectionEnd = s + 1;
+ updateLineNums();
+ }
+ // Ctrl+Enter = build
+ if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+ runCmd('build');
+ }
+});
+
+// ── GO → PYTHON TRANSPILER ───────────────────────────────────────────────────
+function transpileGoToPython(src) {
+ const raw = src.split('\n');
+ const out = [];
+ let inImport = false;
+ let inSwitch = false;
+ let caseCount = 0;
+ let switchIndent = '';
+
+ for (let line of raw) {
+ const tr = line.trim();
+
+ // Package declaration
+ if (/^package\s/.test(tr)) continue;
+
+ // Import block
+ if (tr === 'import (') { inImport = true; continue; }
+ if (inImport && tr === ')') { inImport = false; continue; }
+ if (inImport || /^import\s+"/.test(tr)) continue;
+
+ // Leading tabs → Python indent
+ const tabs = (line.match(/^(\t*)/) || ['',''])[1];
+
+ // ── switch { ──
+ if (/^(\s*)switch\s*\{$/.test(line)) {
+ inSwitch = true; caseCount = 0; switchIndent = tabs;
+ continue;
+ }
+ // ── case COND: (inside switch) ──
+ if (inSwitch && /^\s*case\s+(.+):$/.test(tr)) {
+ const cond = tr.match(/^case\s+(.+):$/)[1];
+ const kw = caseCount === 0 ? 'if' : 'elif';
+ caseCount++;
+ out.push(`${switchIndent}\t${kw} ${cond}:`);
+ continue;
+ }
+ // ── default: (inside switch) ──
+ if (inSwitch && tr === 'default:') {
+ out.push(`${switchIndent}\telse:`);
+ continue;
+ }
+ // ── closing brace of switch ──
+ if (inSwitch && tr === '}') { inSwitch = false; out.push(''); continue; }
+
+ let py = line;
+
+ // func main() { → if __name__ == "__main__":
+ py = py.replace(/^(\s*)func main\(\)\s*\{$/, `$1if __name__ == "__main__":`);
+
+ // func name(params types) rettype { → def name(params):
+ py = py.replace(/^(\s*)func (\w+)\(([^)]*)\)[^{]*\{$/, (_, ind, name, params) => {
+ const ps = params
+ ? params.split(',').map(p => p.trim().replace(/\s+\S+$/, '').trim()).filter(Boolean).join(', ')
+ : '';
+ return `${ind}def ${name}(${ps}):`;
+ });
+
+ // for i := 0; i (< | <=) BOUND; i++ {
+ py = py.replace(
+ /^(\s*)for\s+(\w+)\s*:=\s*0;\s*\2\s*(<|<=)\s*(.+?);\s*\2\+\+\s*\{$/,
+ (_, ind, v, op, bound) => {
+ const b = op === '<=' ? `${bound.trim()} + 1` : bound.trim();
+ return `${ind}for ${v} in range(${b}):`;
+ }
+ );
+
+ // for j := 0; j < i-expr; j++ { (handles n-i-1 etc.)
+ py = py.replace(
+ /^(\s*)for\s+(\w+)\s*:=\s*0;\s*\2\s*<\s*(.+?);\s*\2\+\+\s*\{$/,
+ (_, ind, v, bound) => `${ind}for ${v} in range(${bound.trim()}):`
+ );
+
+ // } else if COND { → elif COND:
+ py = py.replace(/^(\s*)\}\s*else\s+if\s+(.+?)\s*\{$/, '$1elif $2:');
+ // } else { → else:
+ py = py.replace(/^(\s*)\}\s*else\s*\{$/, '$1else:');
+ // if COND { → if COND:
+ py = py.replace(/^(\s*)if\s+(.+?)\s*\{$/, '$1if $2:');
+
+ // := → =
+ py = py.replace(/:=/g, '=');
+
+ // swap assignment: a, b = b, a (Go already uses comma, works as-is)
+
+ // []type{v1, v2, ...} → [v1, v2, ...]
+ py = py.replace(/\[]\w+\{([^}]*)\}/g, '[$1]');
+
+ // fmt.Println(args) → print(args)
+ py = py.replace(/fmt\.Println\(/g, 'print(');
+
+ // fmt.Printf("%Xd\\n", args) → print("%Xd" % (args))
+ py = py.replace(/fmt\.Printf\((".*?")(?:,\s*(.+?))?\)/, (_, fmtStr, args) => {
+ const s = fmtStr.replace(/\\n"$/, '"');
+ return args ? `print(${s} % (${args}))` : `print(${s})`;
+ });
+
+ // naked closing brace → blank line
+ if (py.trim() === '}') { out.push(''); continue; }
+
+ out.push(py);
+ }
+
+ return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// ── PYTHON SPLIT VIEW ─────────────────────────────────────────────────────────
+function syntaxPy(code) {
+ // Step 1: escape HTML
+ let s = escHtml(code);
+
+ // Step 2: tokenize strings first (prevent them being matched by later regexes)
+ const strTokens = [];
+ s = s.replace(/&quot;[^&]*&quot;|"[^"]*"/g, m => {
+ strTokens.push(m);
+ return `\x00S${strTokens.length - 1}\x00`;
+ });
+
+ // Step 3: comments (full line, must come before keyword matching)
+ s = s.replace(/(#[^\n]*)/g, '<span class="py-comment">$1</span>');
+
+ // Step 4: keywords (safe now — no strings present)
+ s = s.replace(
+ /\b(def|if|elif|else|for|return|in|range|print|and|or|not|pass|while|__name__|__main__)\b/g,
+ '<span class="py-kw">$1</span>'
+ );
+
+ // Step 5: numbers
+ s = s.replace(/(?<![\w.])(\d+)(?![\w.])/g, '<span class="py-num">$1</span>');
+
+ // Step 6: restore strings as highlighted spans
+ s = s.replace(/\x00S(\d+)\x00/g, (_, i) =>
+ `<span class="py-str">${strTokens[parseInt(i, 10)]}</span>`
+ );
+
+ return s;
+}
+
+function showPythonSplit() {
+ const code = editor.value;
+ const python = transpileGoToPython(code);
+
+ term.innerHTML = '';
+ term.classList.add('split-mode');
+
+ // Go pane
+ const goPane = document.createElement('div');
+ goPane.className = 'split-pane';
+ goPane.innerHTML =
+ `<div class="split-lang-badge go">Go — Source</div>` +
+ `<pre class="split-code go-code">${escHtml(code)}</pre>`;
+
+ // Python pane
+ const pyPane = document.createElement('div');
+ pyPane.className = 'split-pane py-pane';
+ pyPane.innerHTML =
+ `<div class="split-lang-badge py">Python — Translated</div>` +
+ `<pre class="split-code py-code">${syntaxPy(python)}</pre>`;
+
+ term.appendChild(goPane);
+ term.appendChild(pyPane);
+
+ document.getElementById('metaStage').textContent = 'Python';
+ document.getElementById('metaTime').textContent = '—';
+ document.getElementById('metaSize').textContent = '—';
+}
+
+function resetTerminal() {
+ term.classList.remove('split-mode');
+ clearTerminal();
+}
+
+// ── AST TREE VIEWER ───────────────────────────────────────────────────────────
+function nodeCategory(type) {
+ if (type === 'File') return 'file';
+ if (/Decl/.test(type)) return 'func';
+ if (/Stmt|Block/.test(type)) return 'stmt';
+ if (/Expr|Selector|Call|Binary|Unary/.test(type)) return 'expr';
+ if (/Lit$/.test(type)) return 'lit';
+ return 'other';
+}
+
+function buildAstNode(line) {
+ const indent = (line.match(/^(\s*)/) || ['',''])[1].length;
+ const content = line.trim();
+ if (!content) return null;
+
+ // Match TypeName{ or TypeName( — covers Block(N stmts), FuncDecl{...}, If{...}
+ const typeMatch = content.match(/^([A-Z]\w+)[{(]/);
+ const type = typeMatch ? typeMatch[1] : null;
+ // Strip leading type name and surrounding delimiters for the label
+ const detail = type
+ ? content.replace(/^[A-Z]\w+/, '').replace(/^[{(]/, '').replace(/[})]$/, '')
+ : content;
+
+ return { indent, type, detail: detail || content, content };
+}
+
+function renderAstLines(lines) {
+ const nodes = lines.map(l => buildAstNode(l)).filter(Boolean);
+ if (!nodes.length) return '<div class="ast-label">No AST data</div>';
+
+ function buildTree(arr, startIdx, parentIndent) {
+ let html = '';
+ let i = startIdx;
+ while (i < arr.length) {
+ const node = arr[i];
+ if (node.indent <= parentIndent && i !== startIdx) break;
+
+ const cat = node.type ? nodeCategory(node.type) : 'other';
+ const id = `ast_${i}`;
+
+ // Look ahead for children
+ const nextIdx = i + 1;
+ const hasChildren = nextIdx < arr.length && arr[nextIdx].indent > node.indent;
+
+ const toggle = hasChildren
+ ? `onclick="var c=document.getElementById('${id}');c.classList.toggle('collapsed');this.textContent=c.classList.contains('collapsed')?'>':'v'" style="cursor:pointer;margin-right:4px;font-size:10px;color:var(--muted)"`
+ : '';
+
+ const toggleBtn = hasChildren ? `<span ${toggle}>v</span>` : '<span style="margin-right:4px;font-size:10px;color:var(--border)">.</span>';
+
+ const badge = node.type
+ ? `<span class="ast-badge ${cat}">${node.type}</span>`
+ : '';
+ const label = `<span class="ast-label">${escHtml(node.detail)}</span>`;
+
+ // Find all direct children
+ let j = nextIdx;
+ let childHtml = '';
+ if (hasChildren) {
+ const childIndent = arr[nextIdx].indent;
+ while (j < arr.length && arr[j].indent >= childIndent) {
+ if (arr[j].indent === childIndent) {
+ const [ch, next] = buildTreeNode(arr, j);
+ childHtml += ch;
+ j = next;
+ } else {
+ j++;
+ }
+ }
+ }
+
+ const cls = i === 0 ? 'ast-root' : '';
+ html += `<div class="ast-node ${cls}">${toggleBtn}${badge}${label}`;
+ if (childHtml) html += `<div class="ast-children" id="${id}">${childHtml}</div>`;
+ html += `</div>`;
+ i = j || i + 1;
+ if (!hasChildren) i = nextIdx;
+ }
+ return html;
+ }
+
+ function buildTreeNode(arr, idx) {
+ const node = arr[idx];
+ const cat = node.type ? nodeCategory(node.type) : 'other';
+ const id = `ast_n${idx}`;
+
+ let j = idx + 1;
+ const hasChildren = j < arr.length && arr[j].indent > node.indent;
+ let childHtml = '';
+ if (hasChildren) {
+ while (j < arr.length && arr[j].indent > node.indent) {
+ if (arr[j].indent === arr[idx + 1].indent) {
+ const [ch, nj] = buildTreeNode(arr, j);
+ childHtml += ch;
+ j = nj;
+ } else { j++; }
+ }
+ }
+
+ const toggle = hasChildren
+ ? `onclick="var c=document.getElementById('${id}');c.classList.toggle('collapsed');this.textContent=c.classList.contains('collapsed')?'>':'v'" style="cursor:pointer;margin-right:4px;font-size:10px;color:var(--muted)"`
+ : '';
+ const toggleBtn = hasChildren ? `<span ${toggle}>v</span>` : '<span style="margin-right:4px;font-size:10px;color:var(--border)">.</span>';
+ const badge = node.type ? `<span class="ast-badge ${cat}">${node.type}</span>` : '';
+ const label = `<span class="ast-label">${escHtml(node.detail)}</span>`;
+
+ let html = `<div class="ast-node">${toggleBtn}${badge}${label}`;
+ if (childHtml) html += `<div class="ast-children" id="${id}">${childHtml}</div>`;
+ html += `</div>`;
+ return [html, j];
+ }
+
+ return buildTree(nodes, 0, -1);
+}
+
+async function showAstTree() {
+ if (busy) return;
+ busy = true;
+ setButtons(false);
+
+ term.innerHTML = '';
+ term.classList.remove('split-mode');
+
+ const spin = spinnerLine('Parsing AST…');
+ setPipeline('parse', 'running');
+
+ try {
+ const raw = await fetch(`${SERVER}/compile`, {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({ code: editor.value, command: 'parse' }),
+ });
+ const resp = await raw.json();
+ spin.remove();
+
+ if (!resp.success) {
+ termOutput(resp.output || 'parse failed', 'term-err');
+ highlightErrorLines(resp.output || '');
+ errs++; runs++;
+ } else {
+ oks++; runs++;
+ setPipeline('parse', 'done');
+
+ // Render AST tree
+ const lines = (resp.output || '').split('\n').filter(l => l.trim());
+ const astDiv = document.createElement('div');
+ astDiv.className = 'ast-view';
+
+ // Header badge
+ astDiv.innerHTML =
+ `<div style="margin-bottom:14px;display:flex;align-items:center;gap:10px">` +
+ `<span class="split-lang-badge" style="background:rgba(168,85,247,.15);color:#c084fc;border:1px solid rgba(168,85,247,.3)">AST — Abstract Syntax Tree</span>` +
+ `<span style="font-size:11px;color:var(--muted)">${lines.length} nodes — click to expand/collapse</span>` +
+ `</div>` +
+ renderAstLines(lines);
+
+ term.appendChild(astDiv);
+
+ document.getElementById('metaStage').textContent = 'AST';
+ document.getElementById('metaTime').textContent = resp.compileTime || '—';
+ }
+ } catch(e) {
+ spin && spin.remove && spin.remove();
+ termOutput(`error: ${e.message}`, 'term-err');
+ errs++; runs++;
+ }
+
+ updateStats();
+ busy = false;
+ setButtons(true);
+}
+
+// ── HEALTH CHECK ─────────────────────────────────────────────────────────────
+async function checkHealth() {
+ const dot = document.getElementById('statusDot');
+ const txt = document.getElementById('statusText');
+ try {
+ const r = await fetch(`${SERVER}/health`, { signal: AbortSignal.timeout(2000) });
+ if (r.ok) {
+ dot.classList.add('online');
+ txt.textContent = 'server online';
+ return;
+ }
+ } catch(_) {}
+ dot.classList.remove('online');
+ txt.textContent = 'server offline';
+}
+
+// ── BOOT ─────────────────────────────────────────────────────────────────────
+editor.value = defaultCode;
+updateLineNums();
+checkHealth();
+setInterval(checkHealth, 5000);
+
+// Boot message
+termLine('<span class="term-ok">TinyGo v0.1.0 — A Go compiler written from scratch in Go</span>');
+termLine('<span class="term-info">  Pipeline: Lexer → Parser → TypeChecker → IR → CodeGen → Binary</span>');
+termLine('<span class="term-dim">  Press Run or Build to compile (Ctrl+Enter = Build)</span>');
+termBlankLine();
+termLine('<span class="term-dim"> A Go compiler written from scratch in Go</span>');
+termLine('<span class="term-dim"> v0.1.0 . Lex → Parse → TypeCheck → IR → CodeGen</span>');
+termBlankLine();
+termLine('<span class="term-ok"> OK Pipeline: Lexer → Parser → TypeChecker → IR → CodeGen → Binary</span>');
+termLine('<span class="term-info"> → Press Build or use Ctrl+Enter to compile</span>');
+termBlankLine();
+termLine('<span class="term-dim"> Commands: build | lex | parse | emit</span>');
+termBlankLine();
+</script>
+</body>
+</html>
