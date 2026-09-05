@@ -1,5 +1,5 @@
 
-# TinyGo — A Go Compiler Written in Go
+# TinyGo: A Go Compiler Written in Go
 
 A complete, from-scratch Go compiler that translates a subset of Go source code into native executables.
 
